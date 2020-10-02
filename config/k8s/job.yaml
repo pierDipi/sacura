@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sacura
+  labels:
+    app: sacura
+spec:
+  backoffLimit: 1
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: sacura
+    spec:
+
+      securityContext:
+        runAsNonRoot: true
+
+      # To avoid scheduling the Job on the same node of the target
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    # -> change label
+                    app: my-target-app
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+
+      containers:
+        - image: ko://github.com/pierdipi/sacura/cmd/sacura
+          name: sacura
+          args:
+            - "--config"
+            - "/etc/sacura/sacura.yaml"
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - mountPath: /etc/sacura
+              name: config
+      volumes:
+        - name: config
+          configMap:
+            name: config-sacura
+      restartPolicy: Never
