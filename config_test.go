@@ -27,6 +27,7 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
+  timeout: 1m
 duration: 1m
 timeout: 1m
 `),
@@ -38,7 +39,9 @@ timeout: 1m
 					KeepAlive:          true,
 				},
 				Receiver: ReceiverConfig{
-					Port: 8080,
+					Port:          8080,
+					Timeout:       "1m",
+					ParsedTimeout: time.Minute,
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
@@ -57,6 +60,7 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
+  timeout: 1m
 duration: 1m
 timeout: 1m
 `),
@@ -68,7 +72,9 @@ timeout: 1m
 					KeepAlive:          true,
 				},
 				Receiver: ReceiverConfig{
-					Port: 8080,
+					Port:          8080,
+					Timeout:       "1m",
+					ParsedTimeout: 0, // it isn't set since we check the invalid field before checking timeout
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
@@ -87,6 +93,7 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
+  timeout: 1m
 duration: 1m
 timeout: 1m
 `),
@@ -98,7 +105,9 @@ timeout: 1m
 					KeepAlive:          true,
 				},
 				Receiver: ReceiverConfig{
-					Port: 8080,
+					Port:          8080,
+					Timeout:       "1m",
+					ParsedTimeout: 0, // it isn't set since we check the invalid field before checking timeout
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
@@ -117,6 +126,7 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
+  timeout: 1m
 duration: 1H
 timeout: 1m
 `),
@@ -128,12 +138,14 @@ timeout: 1m
 					KeepAlive:          true,
 				},
 				Receiver: ReceiverConfig{
-					Port: 8080,
+					Port:          8080,
+					Timeout:       "1m",
+					ParsedTimeout: 0, // it isn't set since we check the invalid field before checking timeout
 				},
 				Duration:       "1H",
 				ParsedDuration: 0,
 				Timeout:        "1m",
-				ParsedTimeout:  0, // it isn't set since we check duration before checking timeout
+				ParsedTimeout:  0, // it isn't set since we check the invalid field before checking timeout
 			},
 			wantErr: true,
 		},
@@ -147,6 +159,7 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
+  timeout: 1m
 duration: 1h
 timeout: 1H
 `),
@@ -158,7 +171,9 @@ timeout: 1H
 					KeepAlive:          true,
 				},
 				Receiver: ReceiverConfig{
-					Port: 8080,
+					Port:          8080,
+					Timeout:       "1m",
+					ParsedTimeout: 0, // it isn't set since we check the invalid field before checking timeout
 				},
 				Duration:       "1h",
 				ParsedDuration: time.Hour,
@@ -176,6 +191,7 @@ timeout: 1H
 				t.Errorf("FileConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			t.Log(err)
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FileConfig() got = %v, want %v - (-want, +got) %s", got, tt.want, diff)
 			}
