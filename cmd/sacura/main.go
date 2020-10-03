@@ -72,7 +72,6 @@ func run(path string) error {
 
 	go func() {
 		defer cancel()
-		defer close(received)
 		defer close(sent)
 
 		log.Println("Starting attacker ...")
