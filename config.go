@@ -13,7 +13,6 @@ import (
 )
 
 type Config struct {
-
 	Sender SenderConfig `json:"sender" yaml:"sender"`
 
 	Receiver ReceiverConfig `json:"receiver" yaml:"receiver"`
@@ -33,7 +32,10 @@ type SenderConfig struct {
 }
 
 type ReceiverConfig struct {
-	Port int `json:"port" yaml:"port"`
+	Port    int    `json:"port" yaml:"port"`
+	Timeout string `json:"timeout"`
+
+	ParsedTimeout time.Duration
 }
 
 func FileConfig(r io.Reader) (Config, error) {
@@ -80,6 +82,11 @@ func (c *Config) validate() error {
 
 	if c.Sender.Workers == 0 {
 		c.Sender.Workers = vegeta.DefaultWorkers
+	}
+
+	c.Receiver.ParsedTimeout, err = time.ParseDuration(c.Receiver.Timeout)
+	if err != nil {
+		return invalidErr("receiver.timeout", err)
 	}
 
 	return err

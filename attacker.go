@@ -18,6 +18,7 @@ func StartSender(config Config, sentOut chan string) vegeta.Metrics {
 	attacker := vegeta.NewAttacker(
 		vegeta.Workers(config.Sender.Workers),
 		vegeta.KeepAlive(config.Sender.KeepAlive),
+		vegeta.MaxWorkers(config.Sender.Workers),
 	)
 
 	var metrics vegeta.Metrics
