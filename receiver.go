@@ -31,6 +31,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- s
 			log.Println(err)
 		}
 		<-time.After(config.ParsedTimeout)
+		close(received)
 		cancel()
 	}()
 
