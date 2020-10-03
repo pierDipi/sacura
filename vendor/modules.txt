@@ -23,6 +23,8 @@ github.com/cloudevents/sdk-go/v2/types
 github.com/davecgh/go-spew/spew
 # github.com/dgryski/go-gk v0.0.0-20200319235926-a69029f61654
 ## explicit
+# github.com/go-logr/logr v0.2.0
+github.com/go-logr/logr
 # github.com/go-yaml/yaml v2.1.0+incompatible
 ## explicit
 github.com/go-yaml/yaml
@@ -185,4 +187,9 @@ honnef.co/go/tools/unused
 honnef.co/go/tools/version
 # k8s.io/apimachinery v0.19.2
 ## explicit
+k8s.io/apimachinery/pkg/util/clock
+k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets
+k8s.io/apimachinery/pkg/util/wait
+# k8s.io/klog/v2 v2.2.0
+k8s.io/klog/v2

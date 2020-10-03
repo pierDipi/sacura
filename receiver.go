@@ -12,6 +12,7 @@ import (
 )
 
 func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- string) error {
+	defer close(received)
 
 	protocol, err := cehttp.New(cehttp.WithPort(config.Port))
 	if err != nil {
@@ -26,13 +27,13 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- s
 	innerCtx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		defer cancel()
+
 		<-ctx.Done()
 		if err := ctx.Err(); err != nil {
 			log.Println(err)
 		}
 		<-time.After(config.ParsedTimeout)
-		close(received)
-		cancel()
 	}()
 
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
