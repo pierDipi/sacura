@@ -65,7 +65,7 @@ func run(path string) error {
 	ctx, cancel := context.WithCancel(NewContext())
 
 	log.Println("Creating channels")
-	buffer := int(math.Min(float64(int(config.ParsedDuration)*config.Sender.FrequencyPerSecond), math.MaxInt32))
+	buffer := int(math.Min(float64(int(config.ParsedDuration)*config.Sender.FrequencyPerSecond), math.MaxInt8))
 
 	sent := make(chan string, buffer)
 	received := make(chan string, buffer)
