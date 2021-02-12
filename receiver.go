@@ -24,7 +24,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- s
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	innerCtx, cancel := context.WithCancel(context.Background())
+	innerCtx, cancel := context.WithCancel(ctx)
 
 	go func() {
 		defer cancel()
