@@ -18,8 +18,8 @@ func TestStateManager(t *testing.T) {
 	sent := make(chan string, n)
 
 	sm := NewStateManager()
-	sm.ReadReceived(received)
-	sm.ReadSent(sent)
+	receivedSignal := sm.ReadReceived(received)
+	sentSignal := sm.ReadSent(sent)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -37,6 +37,11 @@ func TestStateManager(t *testing.T) {
 		}
 		wg.Done()
 	}()
+	wg.Wait()
+	close(sent)
+	close(received)
+	<-receivedSignal
+	<-sentSignal
 
 	wg.Wait()
 
