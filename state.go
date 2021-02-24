@@ -46,5 +46,5 @@ func (s *StateManager) Diff() string {
 	diffReceived := sets.NewString(received...).Delete(sent...).List()
 	diffSent := sets.NewString(sent...).Delete(received...).List()
 	
-	return cmp.Diff(received, sent)
+	return cmp.Diff(diffReceived, diffSent)
 }
