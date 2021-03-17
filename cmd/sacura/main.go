@@ -69,6 +69,7 @@ func run(path string) error {
 
 	sent := make(chan string, buffer)
 	received := make(chan string, buffer)
+	var acceptedCount int
 
 	go func() {
 		defer cancel()
@@ -78,7 +79,8 @@ func run(path string) error {
 
 		time.Sleep(time.Second * 10) // Waiting for receiver to start
 
-		metrics := sacura.StartSender(config, sent)
+		var metrics vegeta.Metrics
+		metrics, acceptedCount = sacura.StartSender(config, sent)
 		logMetrics(metrics)
 	}()
 
@@ -104,6 +106,9 @@ func run(path string) error {
 	log.Println("Waiting for sent channel signal")
 	<-sentSignal
 
+	if lost := acceptedCount - sm.ReceivedCount(); lost != 0 {
+		log.Printf("Lost count (accepted but not received): %d - %d = %d", acceptedCount, sm.ReceivedCount(), lost)
+	}
 	if diff := sm.Diff(); diff != "" {
 		return fmt.Errorf("set state is not correct: %s", diff)
 	}
