@@ -39,12 +39,16 @@ func (s *StateManager) ReadReceived(received <-chan string) <-chan struct{} {
 	return sg
 }
 
+func (s *StateManager) ReceivedCount() int {
+	return s.received.Len()
+}
+
 func (s *StateManager) Diff() string {
 	received := s.received.List()
 	sent := s.sent.List()
-	
+
 	diffReceived := sets.NewString(received...).Delete(sent...).List()
 	diffSent := sets.NewString(sent...).Delete(received...).List()
-	
+
 	return cmp.Diff(diffReceived, diffSent)
 }
