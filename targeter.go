@@ -7,11 +7,12 @@ import (
 	ceformat "github.com/cloudevents/sdk-go/v2/binding/format"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
 	cetest "github.com/cloudevents/sdk-go/v2/test"
+	ce "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/uuid"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
 
-func NewTargeterGenerator(targetURL string, out chan<- string) vegeta.Targeter {
+func NewTargeterGenerator(targetURL string, out chan<- ce.Event) vegeta.Targeter {
 
 	return func(target *vegeta.Target) error {
 
@@ -35,7 +36,7 @@ func NewTargeterGenerator(targetURL string, out chan<- string) vegeta.Targeter {
 			Header: hdr,
 		}
 
-		out <- id
+		out <- event
 
 		return nil
 	}

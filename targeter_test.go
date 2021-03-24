@@ -6,6 +6,7 @@ import (
 
 	ceformat "github.com/cloudevents/sdk-go/v2/binding/format"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
+	ce "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/go-cmp/cmp"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
@@ -33,7 +34,7 @@ func TestNewTargeterGenerator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			out := make(chan string, 1)
+			out := make(chan ce.Event, 1)
 			f := NewTargeterGenerator(tt.targetURL, out)
 
 			target := &vegeta.Target{}
@@ -53,9 +54,9 @@ func TestNewTargeterGenerator(t *testing.T) {
 				t.Fatal("out must be of length 1")
 			}
 
-			id := <-out
+			e := <-out
 
-			if id == "" {
+			if e.ID() == "" {
 				t.Fatal("id must be a non empty string")
 			}
 		})

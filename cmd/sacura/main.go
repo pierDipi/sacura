@@ -15,6 +15,7 @@ import (
 
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 	_ "go.uber.org/automaxprocs"
+	ce "github.com/cloudevents/sdk-go/v2"
 
 	"github.com/pierdipi/sacura"
 )
@@ -67,8 +68,8 @@ func run(path string) error {
 	log.Println("Creating channels")
 	buffer := int(math.Min(float64(int(config.ParsedDuration)*config.Sender.FrequencyPerSecond), math.MaxInt8))
 
-	sent := make(chan string, buffer)
-	received := make(chan string, buffer)
+	sent := make(chan ce.Event, buffer)
+	received := make(chan ce.Event, buffer)
 	var acceptedCount int
 
 	go func() {

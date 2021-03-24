@@ -4,12 +4,14 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	ce "github.com/cloudevents/sdk-go/v2"
 )
 
 func TestStartReceiverContextCancelled(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
-	received := make(chan string)
+	received := make(chan ce.Event)
 
 	go func() {
 		defer cancel()

@@ -3,6 +3,7 @@ package sacura
 import (
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/sets"
+	ce "github.com/cloudevents/sdk-go/v2"
 )
 
 type StateManager struct {
@@ -17,22 +18,22 @@ func NewStateManager() *StateManager {
 	}
 }
 
-func (s *StateManager) ReadSent(sent <-chan string) <-chan struct{} {
+func (s *StateManager) ReadSent(sent <-chan ce.Event) <-chan struct{} {
 	sg := make(chan struct{})
 	go func(set *StateManager) {
-		for id := range sent {
-			s.sent.Insert(id)
+		for e := range sent {
+			s.sent.Insert(e.ID())
 		}
 		sg <- struct{}{}
 	}(s)
 	return sg
 }
 
-func (s *StateManager) ReadReceived(received <-chan string) <-chan struct{} {
+func (s *StateManager) ReadReceived(received <-chan ce.Event) <-chan struct{} {
 	sg := make(chan struct{})
 	go func(set *StateManager) {
-		for id := range received {
-			s.received.Insert(id)
+		for e := range received {
+			s.received.Insert(e.ID())
 		}
 		sg <- struct{}{}
 	}(s)

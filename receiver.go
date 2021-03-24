@@ -11,7 +11,7 @@ import (
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
 )
 
-func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- string) error {
+func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- ce.Event) error {
 	defer close(received)
 
 	protocol, err := cehttp.New(cehttp.WithPort(config.Port))
@@ -37,7 +37,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- s
 	}()
 
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
-		received <- event.ID()
+		received <- event
 	})
 	if err != nil {
 		select {
