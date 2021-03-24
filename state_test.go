@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
+	cetest "github.com/cloudevents/sdk-go/v2/test"
+	ce "github.com/cloudevents/sdk-go/v2"
 )
 
 func TestStateManager(t *testing.T) {
 
 	n := 1000
 
-	received := make(chan string, n)
+	received := make(chan ce.Event, n)
 
-	sent := make(chan string, n)
+	sent := make(chan ce.Event, n)
 
 	sm := NewStateManager()
 	receivedSignal := sm.ReadReceived(received)
@@ -26,14 +28,18 @@ func TestStateManager(t *testing.T) {
 
 	go func() {
 		for i := 0; i < n; i++ {
-			sent <- fmt.Sprintf("%d", i)
+			e := cetest.FullEvent()
+			e.SetID(fmt.Sprintf("%d", i))
+			sent <- e
 		}
 		wg.Done()
 	}()
 
 	go func() {
 		for i := 0; i < n; i++ {
-			received <- fmt.Sprintf("%d", i)
+			e := cetest.FullEvent()
+			e.SetID(fmt.Sprintf("%d", i))
+			received <- e
 		}
 		wg.Done()
 	}()

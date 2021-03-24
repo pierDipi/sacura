@@ -4,9 +4,10 @@ import (
 	"time"
 
 	vegeta "github.com/tsenart/vegeta/v12/lib"
+	ce "github.com/cloudevents/sdk-go/v2"
 )
 
-func StartSender(config Config, sentOut chan<- string) (vegeta.Metrics, int) {
+func StartSender(config Config, sentOut chan<- ce.Event) (vegeta.Metrics, int) {
 
 	rate := vegeta.Rate{
 		Freq: config.Sender.FrequencyPerSecond,
