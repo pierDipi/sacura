@@ -13,49 +13,80 @@ import (
 
 func TestStateManager(t *testing.T) {
 
-	n := 1000
+	tt := []struct {
+		name     string
+		config   StateManagerConfig
+		N        int
+		wantDiff bool
+	}{
+		{
+			name:     "Unordered",
+			config:   StateManagerConfig{},
+			N:        1000,
+			wantDiff: false,
+		},
+		{
+			name: "Ordered",
+			config: StateManagerConfig{
+				Ordered: true,
+				OrderedConfig: OrderedConfig{
+					NumPartitionKeys: 100,
+				},
+			},
+			N:        1000,
+			wantDiff: false,
+		},
+	}
 
-	received := make(chan ce.Event, n)
+	for _, tc := range tt {
 
-	sent := make(chan ce.Event, n)
+		t.Run(tc.name, func(t *testing.T) {
 
-	sm := NewStateManager()
-	receivedSignal := sm.ReadReceived(received)
-	sentSignal := sm.ReadSent(sent)
+			n := tc.N
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+			received := make(chan ce.Event, n)
 
-	go func() {
-		for i := 0; i < n; i++ {
-			e := cetest.FullEvent()
-			e.SetID(fmt.Sprintf("%d", i))
-			sent <- e
-		}
-		wg.Done()
-	}()
+			sent := make(chan ce.Event, n)
 
-	go func() {
-		for i := 0; i < n; i++ {
-			e := cetest.FullEvent()
-			e.SetID(fmt.Sprintf("%d", i))
-			received <- e
-		}
-		wg.Done()
-	}()
-	wg.Wait()
-	close(sent)
-	close(received)
-	<-receivedSignal
-	<-sentSignal
+			sm := NewStateManager(StateManagerConfig{})
+			receivedSignal := sm.ReadReceived(received)
+			sentSignal := sm.ReadSent(sent)
 
-	wg.Wait()
+			var wg sync.WaitGroup
+			wg.Add(2)
 
-	_ = wait.PollInfinite(time.Second, func() (done bool, err error) {
-		return len(received) == 0 && len(sent) == 0, nil
-	})
+			go func() {
+				for i := 0; i < n; i++ {
+					e := cetest.FullEvent()
+					e.SetID(fmt.Sprintf("%d", i))
+					sent <- e
+				}
+				wg.Done()
+			}()
 
-	if diff := sm.Diff(); diff != "" {
-		t.Errorf("want not diff, got %s", diff)
+			go func() {
+				for i := 0; i < n; i++ {
+					e := cetest.FullEvent()
+					e.SetID(fmt.Sprintf("%d", i))
+					received <- e
+				}
+				wg.Done()
+			}()
+			wg.Wait()
+			close(sent)
+			close(received)
+			<-receivedSignal
+			<-sentSignal
+
+			wg.Wait()
+
+			_ = wait.PollInfinite(time.Second, func() (done bool, err error) {
+				return len(received) == 0 && len(sent) == 0, nil
+			})
+
+			if diff := sm.Diff(); (diff != "") != tc.wantDiff {
+				t.Errorf("wanted diff? %v, got %s", tc.wantDiff, diff)
+			}
+		})
 	}
 }

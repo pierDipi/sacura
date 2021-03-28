@@ -36,5 +36,8 @@ jobs:
     - name: Unit Test
       run: go test -v -race ./...
 
-    - name: Integration Test
+    - name: Integration Test Unordered
       run: go run cmd/sacura/main.go --config $(pwd)/test/config.yaml
+
+    - name: Integration Test Ordered
+      run: go run cmd/sacura/main.go --config $(pwd)/test/config-ordered.yaml
