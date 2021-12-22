@@ -2,17 +2,18 @@ package sacura
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 
+	ce "github.com/cloudevents/sdk-go/v2"
 	ceformat "github.com/cloudevents/sdk-go/v2/binding/format"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
 	cetest "github.com/cloudevents/sdk-go/v2/test"
-	ce "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/uuid"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
 
-func NewTargeterGenerator(targetURL string, out chan<- ce.Event) vegeta.Targeter {
+func NewTargeterGenerator(config Config, out chan<- ce.Event) vegeta.Targeter {
 
 	return func(target *vegeta.Target) error {
 
@@ -20,6 +21,10 @@ func NewTargeterGenerator(targetURL string, out chan<- ce.Event) vegeta.Targeter
 
 		event := cetest.FullEvent()
 		event.SetID(id)
+
+		if config.Ordered != nil {
+			event.SetExtension("partitionkey", fmt.Sprint(rand.Int()%int(config.Ordered.NumPartitionKeys)))
+		}
 
 		hdr := http.Header{}
 		hdr.Set(cehttp.ContentType, ceformat.JSON.MediaType())
@@ -31,7 +36,7 @@ func NewTargeterGenerator(targetURL string, out chan<- ce.Event) vegeta.Targeter
 
 		*target = vegeta.Target{
 			Method: "POST",
-			URL:    targetURL,
+			URL:    config.Sender.Target,
 			Body:   body,
 			Header: hdr,
 		}

@@ -86,7 +86,7 @@ func run(path string) error {
 	}()
 
 	log.Println("Creating state manager ...")
-	sm := sacura.NewStateManager()
+	sm := sacura.NewStateManager(sacura.StateManagerConfigFromConfig(config))
 	receivedSignal := sm.ReadReceived(received)
 	sentSignal := sm.ReadSent(sent)
 

@@ -35,7 +35,7 @@ func TestNewTargeterGenerator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			out := make(chan ce.Event, 1)
-			f := NewTargeterGenerator(tt.targetURL, out)
+			f := NewTargeterGenerator(Config{Sender: SenderConfig{Target: tt.targetURL}}, out)
 
 			target := &vegeta.Target{}
 			if err := f(target); err != nil {

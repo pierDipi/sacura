@@ -14,7 +14,7 @@ func StartSender(config Config, sentOut chan<- ce.Event) (vegeta.Metrics, int) {
 		Per:  time.Second,
 	}
 
-	targeter := NewTargeterGenerator(config.Sender.Target, sentOut)
+	targeter := NewTargeterGenerator(config, sentOut)
 
 	attacker := vegeta.NewAttacker(
 		vegeta.Workers(config.Sender.Workers),

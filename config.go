@@ -17,11 +17,16 @@ type Config struct {
 
 	Receiver ReceiverConfig `json:"receiver" yaml:"receiver"`
 
-	Duration string `json:"duration" yaml:"duration"`
-	Timeout  string `json:"timeout" yaml:"timeout"`
+	Duration string         `json:"duration" yaml:"duration"`
+	Timeout  string         `json:"timeout" yaml:"timeout"`
+	Ordered  *OrderedConfig `json:"ordered" yaml:"ordered"`
 
 	ParsedDuration time.Duration
 	ParsedTimeout  time.Duration
+}
+
+type OrderedConfig struct {
+	NumPartitionKeys uint8 `json:"numPartitionKeys" yaml:"numPartitionKeys"`
 }
 
 type SenderConfig struct {
