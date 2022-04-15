@@ -13,9 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	vegeta "github.com/tsenart/vegeta/v12/lib"
-	_ "go.uber.org/automaxprocs"
 	ce "github.com/cloudevents/sdk-go/v2"
+	_ "go.uber.org/automaxprocs"
 
 	"github.com/pierdipi/sacura"
 )
@@ -70,7 +69,7 @@ func run(path string) error {
 
 	sent := make(chan ce.Event, buffer)
 	received := make(chan ce.Event, buffer)
-	var acceptedCount int
+	var metrics sacura.Metrics
 
 	go func() {
 		defer cancel()
@@ -80,9 +79,7 @@ func run(path string) error {
 
 		time.Sleep(time.Second * 10) // Waiting for receiver to start
 
-		var metrics vegeta.Metrics
-		metrics, acceptedCount = sacura.StartSender(config, sent)
-		logMetrics(metrics)
+		metrics = sacura.StartSender(config, sent)
 	}()
 
 	log.Println("Creating state manager ...")
@@ -107,8 +104,11 @@ func run(path string) error {
 	log.Println("Waiting for sent channel signal")
 	<-sentSignal
 
-	if lost := acceptedCount - sm.ReceivedCount(); lost != 0 {
-		log.Printf("Lost count (accepted but not received): %d - %d = %d", acceptedCount, sm.ReceivedCount(), lost)
+	sm.Terminated(metrics)
+	logReport(sm.GenerateReport())
+
+	if lost := metrics.AcceptedCount - sm.ReceivedCount(); lost != 0 {
+		log.Printf("Lost count (accepted but not received): %d - %d = %d", metrics.AcceptedCount, sm.ReceivedCount(), lost)
 	}
 	if diff := sm.Diff(); diff != "" {
 		return fmt.Errorf("set state is not correct: %s", diff)
@@ -117,14 +117,14 @@ func run(path string) error {
 	return nil
 }
 
-func logMetrics(metrics vegeta.Metrics) {
-	jsonMetrics, err := json.MarshalIndent(metrics, " ", " ")
+func logReport(report sacura.Report) {
+	jsonReport, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		log.Println("failed to marshal metrics", err)
+		log.Println("failed to marshal report", err)
 		return
 	}
 
-	log.Println("metrics", string(jsonMetrics))
+	log.Println("report", string(jsonReport))
 }
 
 var onlyOneSignalHandler = make(chan struct{})

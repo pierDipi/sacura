@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
+	ce "github.com/cloudevents/sdk-go/v2"
 	ceformat "github.com/cloudevents/sdk-go/v2/binding/format"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
-	ce "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/go-cmp/cmp"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
@@ -48,16 +48,6 @@ func TestNewTargeterGenerator(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, *target, cmp.FilterPath(filter, cmp.Ignore())); diff != "" {
 				t.Fatal("(-want, +got)", diff)
-			}
-
-			if len(out) != 1 {
-				t.Fatal("out must be of length 1")
-			}
-
-			e := <-out
-
-			if e.ID() == "" {
-				t.Fatal("id must be a non empty string")
 			}
 		})
 	}
