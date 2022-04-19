@@ -1,0 +1,48 @@
+diff --git a/vendor/github.com/tsenart/vegeta/v12/lib/attack.go b/vendor/github.com/tsenart/vegeta/v12/lib/attack.go
+index 0294c62..0204f9b 100644
+--- a/vendor/github.com/tsenart/vegeta/v12/lib/attack.go
++++ b/vendor/github.com/tsenart/vegeta/v12/lib/attack.go
+@@ -413,6 +413,7 @@ func (a *Attacker) hit(tr Targeter, name string) *Result {
+ 	}
+ 
+ 	res.Headers = r.Header
++	res.RequestHeaders = req.Header
+ 
+ 	return &res
+ }
+diff --git a/vendor/github.com/tsenart/vegeta/v12/lib/results.go b/vendor/github.com/tsenart/vegeta/v12/lib/results.go
+index eacd42d..67bde0c 100644
+--- a/vendor/github.com/tsenart/vegeta/v12/lib/results.go
++++ b/vendor/github.com/tsenart/vegeta/v12/lib/results.go
+@@ -24,18 +24,19 @@ func init() {
+ 
+ // Result contains the results of a single Target hit.
+ type Result struct {
+-	Attack    string        `json:"attack"`
+-	Seq       uint64        `json:"seq"`
+-	Code      uint16        `json:"code"`
+-	Timestamp time.Time     `json:"timestamp"`
+-	Latency   time.Duration `json:"latency"`
+-	BytesOut  uint64        `json:"bytes_out"`
+-	BytesIn   uint64        `json:"bytes_in"`
+-	Error     string        `json:"error"`
+-	Body      []byte        `json:"body"`
+-	Method    string        `json:"method"`
+-	URL       string        `json:"url"`
+-	Headers   http.Header   `json:"headers"`
++	Attack         string        `json:"attack"`
++	Seq            uint64        `json:"seq"`
++	Code           uint16        `json:"code"`
++	Timestamp      time.Time     `json:"timestamp"`
++	Latency        time.Duration `json:"latency"`
++	BytesOut       uint64        `json:"bytes_out"`
++	BytesIn        uint64        `json:"bytes_in"`
++	Error          string        `json:"error"`
++	Body           []byte        `json:"body"`
++	Method         string        `json:"method"`
++	URL            string        `json:"url"`
++	Headers        http.Header   `json:"headers"`
++	RequestHeaders http.Header   `json:"requestHeaders"`
+ }
+ 
+ // End returns the time at which a Result ended.

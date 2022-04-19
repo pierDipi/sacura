@@ -5,6 +5,7 @@ import (
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
+	"github.com/google/uuid"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -20,11 +21,15 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 	proposed := make(chan ce.Event, cap(sentOut))
 	accepted := make(chan string, cap(sentOut))
 	var m sync.Mutex
+	var wg sync.WaitGroup
 
 	go func() {
 		proposedArr := make(map[string]ce.Event, 100)
 		acceptedArr := sets.NewString()
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			for e := range proposed {
 				func() {
 					m.Lock()
@@ -41,7 +46,11 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 				}()
 			}
 		}()
+
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			for id := range accepted {
 				func() {
 					m.Lock()
@@ -58,7 +67,7 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 		}()
 	}()
 
-	targeter := NewTargeterGenerator(config, proposed)
+	targeter := NewTargeterGenerator(config, uuid.New, proposed)
 
 	attacker := vegeta.NewAttacker(
 		vegeta.Workers(config.Sender.Workers),
@@ -73,13 +82,16 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 		metrics.Add(res)
 		if res.Error == "" && res.Code >= 200 && res.Code < 300 {
 			acceptedCount++
-			id := res.Headers.Get("Ce-Id")
-			accepted <- id
+			id := res.RequestHeaders.Get(CloudEventIdHeader)
+			if id != "" {
+				accepted <- id
+			}
 		}
 	}
 	metrics.Close()
 	close(proposed)
 	close(accepted)
+	wg.Wait()
 
 	return Metrics{
 		ProposedCount: proposedCount,

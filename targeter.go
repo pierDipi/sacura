@@ -13,11 +13,13 @@ import (
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
 
-func NewTargeterGenerator(config Config, out chan<- ce.Event) vegeta.Targeter {
+const CloudEventIdHeader = "Cloudevent-Id"
+
+func NewTargeterGenerator(config Config, newUIID func() uuid.UUID, out chan<- ce.Event) vegeta.Targeter {
 
 	return func(target *vegeta.Target) error {
 
-		id := uuid.New().String()
+		id := newUIID().String()
 
 		event := cetest.FullEvent()
 		event.SetID(id)
@@ -28,6 +30,7 @@ func NewTargeterGenerator(config Config, out chan<- ce.Event) vegeta.Targeter {
 
 		hdr := http.Header{}
 		hdr.Set(cehttp.ContentType, ceformat.JSON.MediaType())
+		hdr.Set(CloudEventIdHeader, id)
 
 		body, err := ceformat.JSON.Marshal(&event)
 		if err != nil {

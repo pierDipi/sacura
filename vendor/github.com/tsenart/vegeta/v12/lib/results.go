@@ -24,18 +24,19 @@ func init() {
 
 // Result contains the results of a single Target hit.
 type Result struct {
-	Attack    string        `json:"attack"`
-	Seq       uint64        `json:"seq"`
-	Code      uint16        `json:"code"`
-	Timestamp time.Time     `json:"timestamp"`
-	Latency   time.Duration `json:"latency"`
-	BytesOut  uint64        `json:"bytes_out"`
-	BytesIn   uint64        `json:"bytes_in"`
-	Error     string        `json:"error"`
-	Body      []byte        `json:"body"`
-	Method    string        `json:"method"`
-	URL       string        `json:"url"`
-	Headers   http.Header   `json:"headers"`
+	Attack         string        `json:"attack"`
+	Seq            uint64        `json:"seq"`
+	Code           uint16        `json:"code"`
+	Timestamp      time.Time     `json:"timestamp"`
+	Latency        time.Duration `json:"latency"`
+	BytesOut       uint64        `json:"bytes_out"`
+	BytesIn        uint64        `json:"bytes_in"`
+	Error          string        `json:"error"`
+	Body           []byte        `json:"body"`
+	Method         string        `json:"method"`
+	URL            string        `json:"url"`
+	Headers        http.Header   `json:"headers"`
+	RequestHeaders http.Header   `json:"requestHeaders"`
 }
 
 // End returns the time at which a Result ended.

@@ -413,6 +413,7 @@ func (a *Attacker) hit(tr Targeter, name string) *Result {
 	}
 
 	res.Headers = r.Header
+	res.RequestHeaders = req.Header
 
 	return &res
 }
