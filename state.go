@@ -2,9 +2,11 @@ package sacura
 
 import (
 	"fmt"
+	"sync"
 
 	ce "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -12,9 +14,13 @@ const (
 )
 
 type StateManager struct {
+	lock     sync.RWMutex
 	received map[string][]string
 	sent     map[string][]string
 	config   StateManagerConfig
+
+	terminated bool
+	metrics    Metrics
 }
 
 type StateManagerConfig struct {
@@ -44,7 +50,11 @@ func (s *StateManager) ReadSent(sent <-chan ce.Event) <-chan struct{} {
 	sg := make(chan struct{})
 	go func(set *StateManager) {
 		for e := range sent {
-			insert(&e, s.sent, &s.config)
+			func() {
+				s.lock.RLock()
+				defer s.lock.RUnlock()
+				insert(&e, s.sent, &s.config)
+			}()
 		}
 		sg <- struct{}{}
 	}(s)
@@ -55,7 +65,11 @@ func (s *StateManager) ReadReceived(received <-chan ce.Event) <-chan struct{} {
 	sg := make(chan struct{})
 	go func(set *StateManager) {
 		for e := range received {
-			insert(&e, s.received, &s.config)
+			func() {
+				s.lock.RLock()
+				defer s.lock.RUnlock()
+				insert(&e, s.received, &s.config)
+			}()
 		}
 		sg <- struct{}{}
 	}(s)
@@ -77,6 +91,9 @@ func insert(e *ce.Event, store map[string][]string, config *StateManagerConfig) 
 }
 
 func (s *StateManager) ReceivedCount() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
 	count := 0
 	for _, v := range s.received {
 		count += len(v)
@@ -85,6 +102,8 @@ func (s *StateManager) ReceivedCount() int {
 }
 
 func (s *StateManager) Diff() string {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
 	hasDiff := false
 	fullDiff := "Diff by partition key\n"
@@ -107,6 +126,40 @@ func (s *StateManager) Diff() string {
 		return ""
 	}
 	return fullDiff
+}
+
+func (s *StateManager) GenerateReport() Report {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	r := Report{
+		LostCount:                0,
+		Metrics:                  s.metrics,
+		LostEventsByPartitionKey: make(map[string][]string, 8),
+		Terminated:               s.terminated,
+	}
+
+	for k, v := range s.sent {
+		sent := v
+		var received []string
+		if v, ok := s.received[k]; ok {
+			received = removeDuplicates(v) // at least once TODO configurable delivery guarantee
+		}
+
+		diff := sets.NewString(sent...).Difference(sets.NewString(received...))
+		r.LostEventsByPartitionKey[k] = diff.List()
+		r.LostCount += len(r.LostEventsByPartitionKey[k])
+	}
+
+	return r
+}
+
+func (s *StateManager) Terminated(metrics Metrics) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.terminated = true
+	s.metrics = metrics
 }
 
 func removeDuplicates(a []string) []string {

@@ -8,36 +8,44 @@ on:
 
 jobs:
 
-  build:
-    name: Build
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
-      with:
-        go-version: ^1.16
-      id: go
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.16
+        id: go
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
 
-    - name: Get dependencies
-      run: |
-        go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
+      - name: Verify codegen
+        run: ./hack/update-codegen.sh
 
-    - name: Build
-      run: go build -v .
+      - name: Verify changed files
+        uses: tj-actions/verify-changed-files@v9
+        id: verify-changed-files
+        with:
+          files: |
+            **
 
-    - name: Unit Test
-      run: go test -v -race ./...
+      - name: Run step only when files change.
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        run:
+          git --no-pager diff
+          exit 1
 
-    - name: Integration Test Unordered
-      run: go run cmd/sacura/main.go --config $(pwd)/test/config.yaml
+      - name: Build
+        run: go build -v .
 
-    - name: Integration Test Ordered
-      run: go run cmd/sacura/main.go --config $(pwd)/test/config-ordered.yaml
+      - name: Unit Test
+        run: go test -v -race ./...
+
+      - name: Integration Test Unordered
+        run: go run cmd/sacura/main.go --config $(pwd)/test/config.yaml
+
+      - name: Integration Test Ordered
+        run: go run cmd/sacura/main.go --config $(pwd)/test/config-ordered.yaml
