@@ -112,7 +112,7 @@ func (s *StateManager) Diff() string {
 		sent := v
 		var received []string
 		if v, ok := s.received[k]; ok {
-			received = removeDuplicates(v) // at least once TODO configurable delivery guarantee
+			received, _ = removeDuplicates(v) // at least once TODO configurable delivery guarantee
 		}
 
 		diff := cmp.Diff(received, sent)
@@ -133,22 +133,29 @@ func (s *StateManager) GenerateReport() Report {
 	defer s.lock.RUnlock()
 
 	r := Report{
-		LostCount:                0,
-		Metrics:                  s.metrics,
-		LostEventsByPartitionKey: make(map[string][]string, 8),
-		Terminated:               s.terminated,
+		LostCount:                     0,
+		Metrics:                       s.metrics,
+		LostEventsByPartitionKey:      make(map[string][]string, 8),
+		DuplicateEventsByPartitionKey: make(map[string][]string, 8),
+		ReceivedEventsByPartitionKey:  make(map[string][]string, 8),
+		Terminated:                    s.terminated,
 	}
 
 	for k, v := range s.sent {
 		sent := v
 		var received []string
+		var duplicates []string
 		if v, ok := s.received[k]; ok {
-			received = removeDuplicates(v) // at least once TODO configurable delivery guarantee
+			received, duplicates = removeDuplicates(v) // at least once TODO configurable delivery guarantee
 		}
 
 		diff := sets.NewString(sent...).Difference(sets.NewString(received...))
 		r.LostEventsByPartitionKey[k] = diff.List()
 		r.LostCount += len(r.LostEventsByPartitionKey[k])
+		r.DuplicateEventsByPartitionKey[k] = duplicates
+		r.DuplicateCount += len(duplicates)
+		r.ReceivedEventsByPartitionKey[k] = v
+		r.ReceivedCount += len(v)
 	}
 
 	return r
@@ -162,14 +169,17 @@ func (s *StateManager) Terminated(metrics Metrics) {
 	s.metrics = metrics
 }
 
-func removeDuplicates(a []string) []string {
+func removeDuplicates(a []string) ([]string, []string) {
 	t := make(map[string]struct{})
 	result := make([]string, 0, len(a))
+	duplicates := make([]string, 0, len(a))
 	for _, v := range a {
 		if _, ok := t[v]; !ok {
 			result = append(result, v)
+		} else {
+			duplicates = append(duplicates, v)
 		}
 		t[v] = struct{}{}
 	}
-	return result
+	return result, duplicates
 }

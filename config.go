@@ -37,8 +37,9 @@ type SenderConfig struct {
 }
 
 type ReceiverConfig struct {
-	Port    int    `json:"port" yaml:"port"`
-	Timeout string `json:"timeout"`
+	Port                    int    `json:"port" yaml:"port"`
+	Timeout                 string `json:"timeout" yaml:"timeout"`
+	MaxDuplicatesPercentage *int   `json:"maxDuplicatesPercentage" yaml:"maxDuplicatesPercentage"`
 
 	ParsedTimeout time.Duration
 }
@@ -77,6 +78,10 @@ func (c *Config) validate() error {
 
 	if c.Sender.Target == "" {
 		return invalidErr("sender.target", errors.New("target cannot be empty"))
+	}
+
+	if c.Receiver.MaxDuplicatesPercentage != nil && *c.Receiver.MaxDuplicatesPercentage < 0 {
+		return invalidErr("received.maxDuplicatesPercentage", errors.New("cannot be negative"))
 	}
 
 	if u, err := url.Parse(c.Sender.Target); err != nil {

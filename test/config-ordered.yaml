@@ -6,6 +6,7 @@ sender:
 receiver:
   port: 34567
   timeout: 1m
+  maxDuplicatesPercentage: 0
 ordered:
   numPartitionKeys: 5
 duration: 1m

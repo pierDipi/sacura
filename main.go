@@ -61,17 +61,29 @@ func Main(config Config) error {
 	<-sentSignal
 
 	sm.Terminated(metrics)
-	logReport(sm.GenerateReport())
+	report := sm.GenerateReport()
+	logReport(report)
 
-	if metrics.AcceptedCount == 0 {
-		return fmt.Errorf("no events were accepted: %+v", metrics)
+	if report.Metrics.AcceptedCount == 0 {
+		return fmt.Errorf("no events were accepted: %+v", report.Metrics)
 	}
 
-	if lost := metrics.AcceptedCount - sm.ReceivedCount(); lost != 0 {
-		log.Printf("Lost count (accepted but not received): %d - %d = %d", metrics.AcceptedCount, sm.ReceivedCount(), lost)
+	if lost := report.Metrics.AcceptedCount - sm.ReceivedCount(); lost != 0 {
+		log.Printf("Lost count (accepted but not received): %d - %d = %d", report.Metrics.AcceptedCount, sm.ReceivedCount(), lost)
 	}
 	if diff := sm.Diff(); diff != "" {
 		return fmt.Errorf("set state is not correct: %s", diff)
+	}
+
+	duplicatesPercentage := ((report.ReceivedCount / report.Metrics.AcceptedCount) - 1) * 100
+	log.Printf("Duplicates percentage %d", duplicatesPercentage)
+
+	if config.Receiver.MaxDuplicatesPercentage != nil && duplicatesPercentage > *config.Receiver.MaxDuplicatesPercentage {
+		return fmt.Errorf("too many duplicates detected %d, expected at most %d, listing duplicates:\n%+v",
+			duplicatesPercentage,
+			config.Receiver.MaxDuplicatesPercentage,
+			report.DuplicateEventsByPartitionKey,
+		)
 	}
 
 	return nil
