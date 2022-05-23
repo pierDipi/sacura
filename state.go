@@ -2,6 +2,7 @@ package sacura
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	ce "github.com/cloudevents/sdk-go/v2"
@@ -115,6 +116,11 @@ func (s *StateManager) Diff() string {
 			received, _ = removeDuplicates(v) // at least once TODO configurable delivery guarantee
 		}
 
+		if !s.config.Ordered {
+			sort.Strings(sent)
+			sort.Strings(received)
+		}
+
 		diff := cmp.Diff(received, sent)
 		if diff != "" {
 			hasDiff = true
@@ -147,6 +153,12 @@ func (s *StateManager) GenerateReport() Report {
 		var duplicates []string
 		if v, ok := s.received[k]; ok {
 			received, duplicates = removeDuplicates(v) // at least once TODO configurable delivery guarantee
+		}
+
+		if !s.config.Ordered {
+			sort.Strings(sent)
+			sort.Strings(received)
+			sort.Strings(duplicates)
 		}
 
 		diff := sets.NewString(sent...).Difference(sets.NewString(received...))

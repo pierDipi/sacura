@@ -41,7 +41,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push container image
         run: |
           export KO_DOCKER_REPO="${{ env.REGISTRY }}/$( echo ${{ env.IMAGE_NAME }} | awk '{print tolower($0)}')"
           ko resolve -f release/image.yaml
