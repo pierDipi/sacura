@@ -41,7 +41,18 @@ type ReceiverConfig struct {
 	Timeout                 string `json:"timeout" yaml:"timeout"`
 	MaxDuplicatesPercentage *int   `json:"maxDuplicatesPercentage" yaml:"maxDuplicatesPercentage"`
 
+	ReceiverFaultConfig *ReceiverFaultConfig `json:"fault" yaml:"fault"`
+
 	ParsedTimeout time.Duration
+}
+
+type ReceiverFaultConfig struct {
+	// MinSleepDuration is the minimum duration to sleep before sending the response.
+	//
+	// When MinSleepDuration is specified, MaxSleepDuration must be specified.
+	MinSleepDuration *time.Duration `json:"minSleepDuration" yaml:"minSleepDuration"`
+	// MaxSleepDuration is the maximum duration to sleep before sending the response.
+	MaxSleepDuration *time.Duration `json:"maxSleepDuration" yaml:"maxSleepDuration"`
 }
 
 func FileConfig(r io.Reader) (Config, error) {
@@ -81,7 +92,19 @@ func (c *Config) validate() error {
 	}
 
 	if c.Receiver.MaxDuplicatesPercentage != nil && *c.Receiver.MaxDuplicatesPercentage < 0 {
-		return invalidErr("received.maxDuplicatesPercentage", errors.New("cannot be negative"))
+		return invalidErr("receiver.maxDuplicatesPercentage", errors.New("cannot be negative"))
+	}
+
+	if c.Receiver.ReceiverFaultConfig != nil && c.Receiver.ReceiverFaultConfig.MinSleepDuration != nil {
+		if c.Receiver.ReceiverFaultConfig.MaxSleepDuration == nil {
+			return invalidErr(
+				"receiver.fault.maxSleepDuration",
+				fmt.Errorf(
+					"maxSleepDuration must be specified when minSleepDuration (%v) is configured",
+					c.Receiver.ReceiverFaultConfig.MinSleepDuration,
+				),
+			)
+		}
 	}
 
 	if u, err := url.Parse(c.Sender.Target); err != nil {

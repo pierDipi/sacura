@@ -11,6 +11,10 @@ func Test_Main(t *testing.T) {
 		path string
 	}{
 		{
+			name: "receiver sleep",
+			path: "test/config-receiver-sleep.yaml",
+		},
+		{
 			name: "unordered",
 			path: "test/config.yaml",
 		},

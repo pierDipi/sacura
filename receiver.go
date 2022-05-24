@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
@@ -37,6 +38,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	}()
 
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
+		maybeSleep(config)
 		received <- event
 	})
 	if err != nil {
@@ -51,4 +53,15 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	}
 
 	return nil
+}
+
+func maybeSleep(config ReceiverConfig) {
+	if config.ReceiverFaultConfig == nil || config.ReceiverFaultConfig.MinSleepDuration == nil {
+		return
+	}
+
+	max := *config.ReceiverFaultConfig.MaxSleepDuration
+	min := *config.ReceiverFaultConfig.MinSleepDuration
+
+	time.Sleep(min + time.Duration(rand.Int63n(int64(max-min))))
 }
