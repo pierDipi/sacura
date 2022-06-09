@@ -68,14 +68,11 @@ func Main(config Config) error {
 		return fmt.Errorf("no events were accepted: %+v", report.Metrics)
 	}
 
-	if lost := report.Metrics.AcceptedCount - sm.ReceivedCount(); lost != 0 {
-		log.Printf("Lost count (accepted but not received): %d - %d = %d", report.Metrics.AcceptedCount, sm.ReceivedCount(), lost)
-	}
-	if diff := sm.Diff(); diff != "" {
-		return fmt.Errorf("set state is not correct: %s", diff)
+	if lost := report.Metrics.AcceptedCount - report.ReceivedCount; lost != 0 {
+		return fmt.Errorf("lost count (accepted but not received): %d - %d = %d", report.Metrics.AcceptedCount, sm.ReceivedCount(), lost)
 	}
 
-	duplicatesPercentage := ((report.ReceivedCount / report.Metrics.AcceptedCount) - 1) * 100
+	duplicatesPercentage := (((report.DuplicateCount + report.ReceivedCount) / report.Metrics.AcceptedCount) - 1) * 100
 	log.Printf("Duplicates percentage %d", duplicatesPercentage)
 
 	if config.Receiver.MaxDuplicatesPercentage != nil && duplicatesPercentage > *config.Receiver.MaxDuplicatesPercentage {
