@@ -20,13 +20,14 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 	proposedCount := 0
 	proposed := make(chan ce.Event, cap(sentOut))
 	accepted := make(chan string, cap(sentOut))
-	var m sync.Mutex
 	var wg sync.WaitGroup
+	wg.Add(2)
 
 	go func() {
 		proposedArr := make(map[string]ce.Event, 100)
 		acceptedArr := sets.NewString()
-		wg.Add(1)
+		var m sync.Mutex
+
 		go func() {
 			defer wg.Done()
 
@@ -47,7 +48,6 @@ func StartSender(config Config, sentOut chan<- ce.Event) Metrics {
 			}
 		}()
 
-		wg.Add(1)
 		go func() {
 			defer wg.Done()
 

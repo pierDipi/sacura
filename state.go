@@ -1,12 +1,11 @@
 package sacura
 
 import (
-	"fmt"
+	"encoding/json"
 	"sort"
 	"sync"
 
 	ce "github.com/cloudevents/sdk-go/v2"
-	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -103,35 +102,12 @@ func (s *StateManager) ReceivedCount() int {
 }
 
 func (s *StateManager) Diff() string {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	hasDiff := false
-	fullDiff := "Diff by partition key\n"
-
-	for k, v := range s.sent {
-		sent := v
-		var received []string
-		if v, ok := s.received[k]; ok {
-			received, _ = removeDuplicates(v) // at least once TODO configurable delivery guarantee
-		}
-
-		if !s.config.Ordered {
-			sort.Strings(sent)
-			sort.Strings(received)
-		}
-
-		diff := cmp.Diff(received, sent)
-		if diff != "" {
-			hasDiff = true
-		}
-		fullDiff += fmt.Sprintf("partitionkey: '%s' (-want, +got)\n%s", k, diff)
+	report := s.GenerateReport()
+	if len(report.LostEventsByPartitionKey) > 0 {
+		b, _ := json.MarshalIndent(report.LostEventsByPartitionKey, "", " ")
+		return "lost events by partition key:\n" + string(b)
 	}
-
-	if !hasDiff {
-		return ""
-	}
-	return fullDiff
+	return ""
 }
 
 func (s *StateManager) GenerateReport() Report {
@@ -148,7 +124,8 @@ func (s *StateManager) GenerateReport() Report {
 	}
 
 	for k, v := range s.sent {
-		sent := v
+		var sent []string
+		copy(sent, v)
 		var received []string
 		var duplicates []string
 		if v, ok := s.received[k]; ok {
@@ -161,13 +138,19 @@ func (s *StateManager) GenerateReport() Report {
 			sort.Strings(duplicates)
 		}
 
-		diff := sets.NewString(sent...).Difference(sets.NewString(received...))
-		r.LostEventsByPartitionKey[k] = diff.List()
-		r.LostCount += len(r.LostEventsByPartitionKey[k])
-		r.DuplicateEventsByPartitionKey[k] = duplicates
-		r.DuplicateCount += len(duplicates)
-		r.ReceivedEventsByPartitionKey[k] = v
-		r.ReceivedCount += len(v)
+		diff := sets.NewString(sent...).Difference(sets.NewString(received...)).List()
+		if len(diff) > 0 {
+			r.LostEventsByPartitionKey[k] = diff
+			r.LostCount += len(r.LostEventsByPartitionKey[k])
+		}
+		if len(duplicates) > 0 {
+			r.DuplicateEventsByPartitionKey[k] = duplicates
+			r.DuplicateCount += len(duplicates)
+		}
+		if len(received) > 0 {
+			r.ReceivedEventsByPartitionKey[k] = received
+			r.ReceivedCount += len(received)
+		}
 	}
 
 	return r
