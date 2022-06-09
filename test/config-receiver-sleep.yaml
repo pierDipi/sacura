@@ -1,14 +1,14 @@
 sender:
   target: http://localhost:34567
   frequency: 10
-  workers: 1
+  workers: 20
   keepAlive: true
 receiver:
   port: 34567
   timeout: 1m
   maxDuplicatesPercentage: 0
   fault:
-    minSleepDuration: 500ms
-    maxSleepDuration: 1s
+    minSleepDuration: 2s
+    maxSleepDuration: 5s
 duration: 1m
 timeout: 1m
