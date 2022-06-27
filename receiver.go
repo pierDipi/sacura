@@ -2,15 +2,42 @@ package sacura
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/http"
+	"strconv"
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
 	ceclient "github.com/cloudevents/sdk-go/v2/client"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/metric/global"
+	"go.opentelemetry.io/otel/metric/instrument"
+	"go.opentelemetry.io/otel/metric/instrument/syncint64"
+	"go.opentelemetry.io/otel/metric/unit"
+	"go.opentelemetry.io/otel/sdk/metric/aggregator/histogram"
+	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
+	"go.opentelemetry.io/otel/sdk/metric/export/aggregation"
+	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
+	selector "go.opentelemetry.io/otel/sdk/metric/selector/simple"
 )
+
+var (
+	latencyHistogram       syncint64.Histogram  = nil
+	latencyHistogramLabels []attribute.KeyValue = nil
+)
+
+const (
+	BenchmarkTimestampAttribute = "benchmarktimestamp"
+)
+
+func init() {
+}
 
 func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- ce.Event) error {
 	defer close(received)
@@ -20,12 +47,13 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 		return fmt.Errorf("failed to create protocol: %w", err)
 	}
 
-	client, err := ceclient.New(protocol)
+	client, err := ceclient.New(protocol, ceclient.WithPollGoroutines(100))
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	innerCtx, cancel := context.WithCancel(context.Background())
+	exportMetrics(innerCtx)
 
 	go func() {
 		defer cancel()
@@ -35,9 +63,22 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			log.Println(err)
 		}
 		<-time.After(config.ParsedTimeout)
+
+		log.Println("Receiver timeout reached")
 	}()
 
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
+		exstensions := event.Extensions()
+		if v, ok := exstensions[BenchmarkTimestampAttribute]; ok {
+			t, err := strconv.ParseInt(v.(string), 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			start := time.Unix(t, 0)
+			latency := time.Since(start)
+			latencyHistogram.Record(ctx, latency.Milliseconds(), latencyHistogramLabels...)
+		}
+
 		maybeSleep(config)
 		received <- event
 	})
@@ -64,4 +105,76 @@ func maybeSleep(config ReceiverConfig) {
 	min := *config.ReceiverFaultConfig.MinSleepDuration
 
 	time.Sleep(min + time.Duration(rand.Int63n(int64(max-min))))
+}
+
+func exportMetrics(ctx context.Context) {
+	config := prometheus.Config{
+		DefaultHistogramBoundaries: []float64{
+			100, 500, 1000, // < 1s
+			5 * 1000, 10 * 1000, 30 * 1000, 60 * 1000, // < 60s
+			5 * 60 * 1000, 10 * 60 * 1000, 20 * 60 * 1000, // < 20m
+		},
+	}
+
+	ctrl := controller.New(
+		processor.NewFactory(
+			selector.NewWithHistogramDistribution(
+				histogram.WithExplicitBoundaries(config.DefaultHistogramBoundaries),
+			),
+			aggregation.CumulativeTemporalitySelector(),
+			processor.WithMemory(true),
+		),
+	)
+
+	promExporter, err := prometheus.New(config, ctrl)
+	if err != nil {
+		panic(err)
+	}
+
+	global.SetMeterProvider(ctrl)
+
+	meter := global.Meter("sacura")
+
+	latencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e_ms",
+		instrument.WithUnit(unit.Milliseconds),
+		instrument.WithDescription("Histogram for E2E latency since "+BenchmarkTimestampAttribute),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		s := http.Server{
+			Handler: http.HandlerFunc(promExporter.ServeHTTP),
+			Addr:    ":9090",
+		}
+		defer s.Close()
+
+		go func() {
+			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatal(err)
+			}
+		}()
+
+		<-ctx.Done()
+		scrapeMetrics()
+		_ = s.Close()
+
+		log.Println("Metrics server closed")
+	}()
+}
+
+func scrapeMetrics() {
+	resp, err := http.DefaultClient.Get("http://localhost:9090")
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode >= 300 {
+		panic("expected status code 2xx, got " + fmt.Sprint(resp.StatusCode))
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Metrics\n", string(body))
 }

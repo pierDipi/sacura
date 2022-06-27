@@ -1,12 +1,21 @@
+/*
+ Copyright 2021 The CloudEvents Authors
+ SPDX-License-Identifier: Apache-2.0
+*/
+
 package http
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"go.uber.org/zap"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/cloudevents/sdk-go/v2/binding"
 	cecontext "github.com/cloudevents/sdk-go/v2/context"
@@ -47,6 +56,24 @@ func (p *Protocol) doWithRetry(ctx context.Context, params *cecontext.RetryParam
 	retry := 0
 	results := make([]protocol.Result, 0)
 
+	var (
+		body []byte
+		err  error
+	)
+
+	if req != nil && req.Body != nil {
+		defer func() {
+			if err = req.Body.Close(); err != nil {
+				cecontext.LoggerFrom(ctx).Warnw("could not close request body", zap.Error(err))
+			}
+		}()
+		body, err = ioutil.ReadAll(req.Body)
+		if err != nil {
+			panic(err)
+		}
+		resetBody(req, body)
+	}
+
 	for {
 		msg, result := p.doOnce(req)
 
@@ -69,20 +96,8 @@ func (p *Protocol) doWithRetry(ctx context.Context, params *cecontext.RetryParam
 		{
 			var httpResult *Result
 			if errors.As(result, &httpResult) {
-				// Retry error codes - string isn't used, it's just there so
-				// people know what each error code's title is
-				doRetry := map[int]string{
-					404: "Not Found",
-					413: "Payload Too Large",
-					425: "Too Early",
-					429: "Too Many Requests",
-					502: "Bad Gateway",
-					503: "Service Unavailable",
-					504: "Gateway Timeout",
-				}
-
 				sc := httpResult.StatusCode
-				if _, ok := doRetry[sc]; ok {
+				if p.isRetriableFunc(sc) {
 					// retry!
 					goto DoBackoff
 				} else {
@@ -96,6 +111,8 @@ func (p *Protocol) doWithRetry(ctx context.Context, params *cecontext.RetryParam
 		}
 
 	DoBackoff:
+		resetBody(req, body)
+
 		// Wait for the correct amount of backoff time.
 
 		// total tries = retry + 1
@@ -107,5 +124,22 @@ func (p *Protocol) doWithRetry(ctx context.Context, params *cecontext.RetryParam
 
 		retry++
 		results = append(results, result)
+	}
+}
+
+// reset body to allow it to be read multiple times, e.g. when retrying http
+// requests
+func resetBody(req *http.Request, body []byte) {
+	if req == nil || req.Body == nil {
+		return
+	}
+
+	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+
+	// do not modify existing GetBody function
+	if req.GetBody == nil {
+		req.GetBody = func() (io.ReadCloser, error) {
+			return ioutil.NopCloser(bytes.NewReader(body)), nil
+		}
 	}
 }
