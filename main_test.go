@@ -1,8 +1,10 @@
 package sacura
 
 import (
+	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 func Test_Main(t *testing.T) {
@@ -10,8 +12,9 @@ func Test_Main(t *testing.T) {
 	t.Setenv("OTEL_SERVICE_NAME", "sacura")
 
 	tt := []struct {
-		name string
-		path string
+		name        string
+		path        string
+		cancelAfter *time.Duration
 	}{
 		{
 			name: "receiver sleep",
@@ -24,6 +27,14 @@ func Test_Main(t *testing.T) {
 		{
 			name: "ordered",
 			path: "test/config-ordered.yaml",
+		},
+		{
+			name: "receiver only",
+			path: "test/config-receiver-only.yaml",
+			cancelAfter: func() *time.Duration {
+				c := 5 * time.Second
+				return &c
+			}(),
 		},
 	}
 
@@ -40,9 +51,28 @@ func Test_Main(t *testing.T) {
 				t.Fatalf("failed to read config from file %s: %v", tc.path, err)
 			}
 
-			if err := Main(config); err != nil {
-				t.Error(err)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			errChan := make(chan error, 1)
+			defer close(errChan)
+
+			go func() {
+				errChan <- Main(ctx, config)
+				t.Logf("Main returned")
+			}()
+
+			if tc.cancelAfter != nil {
+				go func() {
+					<-time.After(*tc.cancelAfter)
+					cancel()
+				}()
 			}
+
+			if err := <-errChan; err != nil {
+				t.Fatal(err)
+			}
+
+			t.Logf("No errors")
 		})
 	}
 }

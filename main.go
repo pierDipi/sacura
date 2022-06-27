@@ -6,19 +6,17 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
-	"os/signal"
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
 )
 
-func Main(config Config) error {
+func Main(ctx context.Context, config Config) error {
 
 	c, _ := json.Marshal(&config)
 	log.Println("config", string(c))
 
-	ctx, cancel := context.WithCancel(NewContext())
+	ctx, cancel := context.WithCancel(ctx)
 
 	log.Println("Creating channels")
 	buffer := int(math.Min(float64(int(config.ParsedDuration)*config.Sender.FrequencyPerSecond), math.MaxInt8))
@@ -28,18 +26,18 @@ func Main(config Config) error {
 	var metrics Metrics
 
 	go func() {
-		defer cancel()
 		defer close(sent)
 
-		log.Println("Starting attacker ...")
-
-		time.Sleep(time.Second * 10) // Waiting for receiver to start
-
-		metrics = StartSender(config, sent)
+		if !config.Sender.Disabled {
+			defer cancel()
+			log.Println("Starting attacker ...")
+			time.Sleep(time.Second * 10) // Waiting for receiver to start
+			metrics = StartSender(config, sent)
+		}
 	}()
 
 	log.Println("Creating state manager ...")
-	sm := NewStateManager(StateManagerConfigFromConfig(config))
+	sm := NewStateManager(config)
 	receivedSignal := sm.ReadReceived(received)
 	sentSignal := sm.ReadSent(sent)
 
@@ -48,7 +46,11 @@ func Main(config Config) error {
 		return fmt.Errorf("failed to start receiver: %w", err)
 	}
 
-	log.Println("Waiting for attacker to finish ...")
+	if !config.Sender.Disabled {
+		log.Println("Waiting for attacker to finish ...")
+	} else {
+		log.Println("Waiting for term signals")
+	}
 	<-ctx.Done()
 
 	log.Println("Waiting for received channel signal")
@@ -61,23 +63,29 @@ func Main(config Config) error {
 	report := sm.GenerateReport()
 	logReport(report)
 
-	if report.Metrics.AcceptedCount == 0 {
+	if !config.Sender.Disabled && report.Metrics.AcceptedCount == 0 {
 		return fmt.Errorf("no events were accepted: %+v", report.Metrics)
 	}
 
-	if lost := report.Metrics.AcceptedCount - report.ReceivedCount; lost != 0 {
+	if lost := report.Metrics.AcceptedCount - report.ReceivedCount; !config.Sender.Disabled && lost != 0 {
 		return fmt.Errorf("lost count (accepted but not received): %d - %d = %d", report.Metrics.AcceptedCount, sm.ReceivedCount(), lost)
 	}
 
-	duplicatesPercentage := (((report.DuplicateCount + report.ReceivedCount) / report.Metrics.AcceptedCount) - 1) * 100
-	log.Printf("Duplicates percentage %d", duplicatesPercentage)
+	if report.ReceivedCount > 0 {
 
-	if config.Receiver.MaxDuplicatesPercentage != nil && duplicatesPercentage > *config.Receiver.MaxDuplicatesPercentage {
-		return fmt.Errorf("too many duplicates detected %d, expected at most %d, listing duplicates:\n%+v",
-			duplicatesPercentage,
-			config.Receiver.MaxDuplicatesPercentage,
-			report.DuplicateEventsByPartitionKey,
-		)
+		// x: 100 =  duplicateCount : (duplicateCount +  receivedCount)
+		// x = 100 * duplicateCount / (duplicateCount + receivedCount)
+		duplicatesPercentage := 100 * report.DuplicateCount / (report.DuplicateCount + report.ReceivedCount)
+
+		log.Printf("Duplicates percentage %d", duplicatesPercentage)
+
+		if config.Receiver.MaxDuplicatesPercentage != nil && duplicatesPercentage > *config.Receiver.MaxDuplicatesPercentage {
+			return fmt.Errorf("too many duplicates detected %d, expected at most %d, listing duplicates:\n%+v",
+				duplicatesPercentage,
+				*config.Receiver.MaxDuplicatesPercentage,
+				report.DuplicateEventsByPartitionKey,
+			)
+		}
 	}
 
 	return nil
@@ -91,10 +99,4 @@ func logReport(report Report) {
 	}
 
 	log.Println("report", string(jsonReport))
-}
-
-// NewContext creates a new context with signal handling.
-func NewContext() context.Context {
-	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
-	return ctx
 }

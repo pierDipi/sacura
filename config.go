@@ -30,6 +30,7 @@ type OrderedConfig struct {
 }
 
 type SenderConfig struct {
+	Disabled           bool   `json:"disabled" yaml:"disabled"`
 	Target             string `json:"target" yaml:"target"`
 	FrequencyPerSecond int    `json:"frequency" yaml:"frequency"`
 	Workers            uint64 `json:"workers" yaml:"workers"`
@@ -83,11 +84,11 @@ func (c *Config) validate() error {
 		return invalidErr("timeout", err)
 	}
 
-	if c.Sender.FrequencyPerSecond <= 0 {
+	if !c.Sender.Disabled && c.Sender.FrequencyPerSecond <= 0 {
 		return invalidErr("sender.frequency", errors.New("frequency cannot be less or equal to 0"))
 	}
 
-	if c.Sender.Target == "" {
+	if !c.Sender.Disabled && c.Sender.Target == "" {
 		return invalidErr("sender.target", errors.New("target cannot be empty"))
 	}
 
@@ -107,9 +108,9 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if u, err := url.Parse(c.Sender.Target); err != nil {
+	if u, err := url.Parse(c.Sender.Target); !c.Sender.Disabled && err != nil {
 		return invalidErr("sender.target", err)
-	} else if !u.IsAbs() {
+	} else if !c.Sender.Disabled && !u.IsAbs() {
 		return invalidErr("sender.target", errors.New("target must be an absolute URL"))
 	}
 

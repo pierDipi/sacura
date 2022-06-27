@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-	cetest "github.com/cloudevents/sdk-go/v2/test"
 	ce "github.com/cloudevents/sdk-go/v2"
+	cetest "github.com/cloudevents/sdk-go/v2/test"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func TestStateManager(t *testing.T) {
@@ -48,7 +48,7 @@ func TestStateManager(t *testing.T) {
 
 			sent := make(chan ce.Event, n)
 
-			sm := NewStateManager(StateManagerConfig{})
+			sm := NewStateManager(Config{})
 			receivedSignal := sm.ReadReceived(received)
 			sentSignal := sm.ReadSent(sent)
 

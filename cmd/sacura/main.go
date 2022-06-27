@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 
 	_ "go.uber.org/automaxprocs"
 
@@ -52,5 +54,11 @@ func run(path string) error {
 		return fmt.Errorf("failef to read config from file %s: %w", path, err)
 	}
 
-	return sacura.Main(config)
+	return sacura.Main(NewContext(), config)
+}
+
+// NewContext creates a new context with signal handling.
+func NewContext() context.Context {
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	return ctx
 }
