@@ -51,9 +51,6 @@ func Main(config Config) error {
 	log.Println("Waiting for attacker to finish ...")
 	<-ctx.Done()
 
-	log.Println("Attacker finished sending events - waiting for events")
-	<-time.After(config.ParsedTimeout)
-
 	log.Println("Waiting for received channel signal")
 	<-receivedSignal
 

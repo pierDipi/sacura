@@ -6,6 +6,9 @@ import (
 )
 
 func Test_Main(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "k=v")
+	t.Setenv("OTEL_SERVICE_NAME", "sacura")
+
 	tt := []struct {
 		name string
 		path string

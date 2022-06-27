@@ -2,13 +2,13 @@ package sacura
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
@@ -33,33 +33,13 @@ var (
 )
 
 const (
-	BenchmarkTimestampAttribute = "ce-benchmarktimestamp"
+	BenchmarkTimestampAttribute = "benchmarktimestamp"
 )
 
 func init() {
-	meter := global.MeterProvider().Meter("sacura")
-
-	keyValueLabels := strings.Split(os.Getenv("LATENCY_E2E_METRIC_LABELS"), ",")
-	labels := make([]attribute.KeyValue, 0, len(keyValueLabels)*2)
-	for _, kv := range keyValueLabels {
-		parts := strings.Split(kv, "=")
-		labels = append(labels, attribute.String(parts[0], parts[1]))
-	}
-	latencyHistogramLabels = labels
-
-	var err error
-	latencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e",
-		instrument.WithUnit(unit.Milliseconds),
-		instrument.WithDescription("Histogram for E2E latency since "+BenchmarkTimestampAttribute),
-	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- ce.Event) error {
-	exportMetrics(ctx)
-
 	defer close(received)
 
 	protocol, err := cehttp.New(cehttp.WithPort(config.Port))
@@ -67,12 +47,13 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 		return fmt.Errorf("failed to create protocol: %w", err)
 	}
 
-	client, err := ceclient.New(protocol)
+	client, err := ceclient.New(protocol, ceclient.WithPollGoroutines(100))
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	innerCtx, cancel := context.WithCancel(context.Background())
+	exportMetrics(innerCtx)
 
 	go func() {
 		defer cancel()
@@ -82,6 +63,8 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			log.Println(err)
 		}
 		<-time.After(config.ParsedTimeout)
+
+		log.Println("Receiver timeout reached")
 	}()
 
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
@@ -93,7 +76,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			}
 			start := time.Unix(t, 0)
 			latency := time.Since(start)
-			latencyHistogram.Record(ctx, int64(latency), latencyHistogramLabels...)
+			latencyHistogram.Record(ctx, latency.Milliseconds(), latencyHistogramLabels...)
 		}
 
 		maybeSleep(config)
@@ -125,7 +108,13 @@ func maybeSleep(config ReceiverConfig) {
 }
 
 func exportMetrics(ctx context.Context) {
-	config := prometheus.Config{}
+	config := prometheus.Config{
+		DefaultHistogramBoundaries: []float64{
+			100, 500, 1000, // < 1s
+			5 * 1000, 10 * 1000, 30 * 1000, 60 * 1000, // < 60s
+			5 * 60 * 1000, 10 * 60 * 1000, 20 * 60 * 1000, // < 20m
+		},
+	}
 
 	ctrl := controller.New(
 		processor.NewFactory(
@@ -137,24 +126,55 @@ func exportMetrics(ctx context.Context) {
 		),
 	)
 
-	exporter, err := prometheus.New(config, ctrl)
+	promExporter, err := prometheus.New(config, ctrl)
 	if err != nil {
 		panic(err)
 	}
 
-	global.SetMeterProvider(exporter.MeterProvider())
+	global.SetMeterProvider(ctrl)
+
+	meter := global.Meter("sacura")
+
+	latencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e_ms",
+		instrument.WithUnit(unit.Milliseconds),
+		instrument.WithDescription("Histogram for E2E latency since "+BenchmarkTimestampAttribute),
+	)
+	if err != nil {
+		panic(err)
+	}
 
 	go func() {
 		s := http.Server{
-			Handler: http.HandlerFunc(exporter.ServeHTTP),
+			Handler: http.HandlerFunc(promExporter.ServeHTTP),
+			Addr:    ":9090",
 		}
+		defer s.Close()
+
 		go func() {
-			if err := s.ListenAndServe(); err != nil {
+			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatal(err)
 			}
 		}()
 
 		<-ctx.Done()
+		scrapeMetrics()
 		_ = s.Close()
+
+		log.Println("Metrics server closed")
 	}()
+}
+
+func scrapeMetrics() {
+	resp, err := http.DefaultClient.Get("http://localhost:9090")
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode >= 300 {
+		panic("expected status code 2xx, got " + fmt.Sprint(resp.StatusCode))
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Metrics\n", string(body))
 }

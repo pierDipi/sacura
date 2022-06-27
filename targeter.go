@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
 	ceformat "github.com/cloudevents/sdk-go/v2/binding/format"
@@ -23,6 +24,7 @@ func NewTargeterGenerator(config Config, newUIID func() uuid.UUID, out chan<- ce
 
 		event := cetest.FullEvent()
 		event.SetID(id)
+		event.SetExtension(BenchmarkTimestampAttribute, fmt.Sprint(time.Now().Unix()))
 
 		if config.Ordered != nil {
 			event.SetExtension("partitionkey", fmt.Sprint(rand.Int()%int(config.Ordered.NumPartitionKeys)))
