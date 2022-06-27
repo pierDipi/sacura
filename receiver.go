@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
@@ -53,7 +54,8 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	}
 
 	innerCtx, cancel := context.WithCancel(context.Background())
-	exportMetrics(innerCtx)
+	wait := exportMetrics(innerCtx)
+	defer wait()
 
 	go func() {
 		defer cancel()
@@ -107,7 +109,7 @@ func maybeSleep(config ReceiverConfig) {
 	time.Sleep(min + time.Duration(rand.Int63n(int64(max-min))))
 }
 
-func exportMetrics(ctx context.Context) {
+func exportMetrics(ctx context.Context) (wait func()) {
 	config := prometheus.Config{
 		DefaultHistogramBoundaries: []float64{
 			100, 500, 1000, // < 1s
@@ -143,7 +145,11 @@ func exportMetrics(ctx context.Context) {
 		panic(err)
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		s := http.Server{
 			Handler: http.HandlerFunc(promExporter.ServeHTTP),
 			Addr:    ":9090",
@@ -158,10 +164,11 @@ func exportMetrics(ctx context.Context) {
 
 		<-ctx.Done()
 		scrapeMetrics()
-		_ = s.Close()
 
 		log.Println("Metrics server closed")
 	}()
+
+	return wg.Wait
 }
 
 func scrapeMetrics() {

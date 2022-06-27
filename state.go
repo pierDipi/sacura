@@ -17,7 +17,9 @@ type StateManager struct {
 	lock     sync.RWMutex
 	received map[string][]string
 	sent     map[string][]string
-	config   StateManagerConfig
+
+	config             Config
+	stateManagerConfig StateManagerConfig
 
 	terminated bool
 	metrics    Metrics
@@ -28,7 +30,7 @@ type StateManagerConfig struct {
 	OrderedConfig
 }
 
-func StateManagerConfigFromConfig(config Config) StateManagerConfig {
+func stateManagerConfigFromConfig(config Config) StateManagerConfig {
 	if config.Ordered != nil {
 		return StateManagerConfig{
 			OrderedConfig: *config.Ordered,
@@ -38,11 +40,12 @@ func StateManagerConfigFromConfig(config Config) StateManagerConfig {
 	return StateManagerConfig{Ordered: false}
 }
 
-func NewStateManager(config StateManagerConfig) *StateManager {
+func NewStateManager(config Config) *StateManager {
 	return &StateManager{
-		received: make(map[string][]string),
-		sent:     make(map[string][]string),
-		config:   config,
+		received:           make(map[string][]string),
+		sent:               make(map[string][]string),
+		config:             config,
+		stateManagerConfig: stateManagerConfigFromConfig(config),
 	}
 }
 
@@ -53,7 +56,7 @@ func (s *StateManager) ReadSent(sent <-chan ce.Event) <-chan struct{} {
 			func() {
 				s.lock.RLock()
 				defer s.lock.RUnlock()
-				insert(&e, s.sent, &s.config)
+				insert(&e, s.sent, &s.stateManagerConfig)
 			}()
 		}
 		sg <- struct{}{}
@@ -68,7 +71,7 @@ func (s *StateManager) ReadReceived(received <-chan ce.Event) <-chan struct{} {
 			func() {
 				s.lock.RLock()
 				defer s.lock.RUnlock()
-				insert(&e, s.received, &s.config)
+				insert(&e, s.received, &s.stateManagerConfig)
 			}()
 		}
 		sg <- struct{}{}
@@ -132,7 +135,7 @@ func (s *StateManager) GenerateReport() Report {
 			received, duplicates = removeDuplicates(v) // at least once TODO configurable delivery guarantee
 		}
 
-		if !s.config.Ordered {
+		if !s.stateManagerConfig.Ordered {
 			sort.Strings(sent)
 			sort.Strings(received)
 			sort.Strings(duplicates)
