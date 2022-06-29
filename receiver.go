@@ -76,9 +76,13 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			if err != nil {
 				panic(err)
 			}
-			start := time.Unix(t, 0)
+			start := time.UnixMilli(t)
 			latency := time.Since(start)
-			latencyHistogram.Record(ctx, latency.Milliseconds(), latencyHistogramLabels...)
+			if latency.Milliseconds() < 0 {
+				log.Printf("Negative latency %d\n", latency.Milliseconds())
+			} else {
+				latencyHistogram.Record(ctx, latency.Milliseconds(), latencyHistogramLabels...)
+			}
 		}
 
 		maybeSleep(config)
