@@ -17,6 +17,10 @@ func Test_Main(t *testing.T) {
 		cancelAfter *time.Duration
 	}{
 		{
+			name: "Request path",
+			path: "test/config-request-path.yaml",
+		},
+		{
 			name: "receiver sleep",
 			path: "test/config-receiver-sleep.yaml",
 		},
