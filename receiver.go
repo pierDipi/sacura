@@ -37,18 +37,20 @@ const (
 	BenchmarkTimestampAttribute = "benchmarktimestamp"
 )
 
-func init() {
-}
-
 func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- ce.Event) error {
 	defer close(received)
 
-	protocol, err := cehttp.New(cehttp.WithPort(config.Port))
+	protocol, err := cehttp.New(
+		cehttp.WithPort(config.Port),
+		cehttp.WithRequestDataAtContextMiddleware(),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create protocol: %w", err)
 	}
 
-	client, err := ceclient.New(protocol, ceclient.WithPollGoroutines(100))
+	client, err := ceclient.New(protocol,
+		ceclient.WithPollGoroutines(100),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -81,7 +83,9 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			if latency.Milliseconds() < 0 {
 				log.Printf("Negative latency %d\n", latency.Milliseconds())
 			} else {
-				latencyHistogram.Record(ctx, latency.Milliseconds(), latencyHistogramLabels...)
+				req := cehttp.RequestDataFromContext(ctx)
+				labels := addRequestLabels(req, latencyHistogramLabels)
+				latencyHistogram.Record(ctx, latency.Milliseconds(), labels...)
 			}
 		}
 
@@ -100,6 +104,18 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	}
 
 	return nil
+}
+
+func addRequestLabels(req *cehttp.RequestData, latencyHistogramLabels []attribute.KeyValue) []attribute.KeyValue {
+	labels := make([]attribute.KeyValue, 0, len(latencyHistogramLabels)+2)
+	copy(labels, latencyHistogramLabels)
+	path := "/"
+	if req.URL.Path != "" {
+		path = req.URL.Path
+	}
+	labels = append(labels, attribute.String("request_path", path))
+	labels = append(labels, attribute.String("remote_addr", req.RemoteAddr))
+	return labels
 }
 
 func maybeSleep(config ReceiverConfig) {
