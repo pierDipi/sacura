@@ -24,7 +24,7 @@ func NewTargeterGenerator(config Config, newUIID func() uuid.UUID, out chan<- ce
 
 		event := cetest.FullEvent()
 		event.SetID(id)
-		event.SetExtension(BenchmarkTimestampAttribute, fmt.Sprint(time.Now().Unix()))
+		event.SetExtension(BenchmarkTimestampAttribute, fmt.Sprint(time.Now().UnixMilli()))
 
 		if config.Ordered != nil {
 			event.SetExtension("partitionkey", fmt.Sprint(rand.Int()%int(config.Ordered.NumPartitionKeys)))

@@ -1,0 +1,11 @@
+sender:
+  target: http://localhost:34567/path
+  frequency: 10
+  workers: 2
+  keepAlive: true
+receiver:
+  port: 34567
+  timeout: 1m
+  maxDuplicatesPercentage: 0
+duration: 1m
+timeout: 1m
