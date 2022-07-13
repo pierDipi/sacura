@@ -12,6 +12,7 @@ require (
 	go.opentelemetry.io/otel/exporters/prometheus v0.30.0
 	go.opentelemetry.io/otel/metric v0.30.0
 	go.opentelemetry.io/otel/sdk/metric v0.30.0
+	go.uber.org/atomic v1.6.0
 	go.uber.org/automaxprocs v1.3.0
 	k8s.io/apimachinery v0.24.2
 )
@@ -40,7 +41,6 @@ require (
 	github.com/stretchr/testify v1.7.1 // indirect
 	go.opentelemetry.io/otel/sdk v1.7.0 // indirect
 	go.opentelemetry.io/otel/trace v1.7.0 // indirect
-	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
 	go.uber.org/zap v1.15.0 // indirect
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect

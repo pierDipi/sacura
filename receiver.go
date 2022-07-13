@@ -26,11 +26,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/export/aggregation"
 	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	selector "go.opentelemetry.io/otel/sdk/metric/selector/simple"
+	"go.uber.org/atomic"
 )
 
 var (
 	latencyHistogram       syncint64.Histogram  = nil
 	latencyHistogramLabels []attribute.KeyValue = nil
+
+	inFlightRequestsHistogram       syncint64.Histogram  = nil
+	inFlightRequestsHistogramLabels []attribute.KeyValue = nil
 )
 
 const (
@@ -71,7 +75,19 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 		log.Println("Receiver timeout reached")
 	}()
 
+	inFlightRequests := atomic.NewInt64(0)
+
 	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
+		req := cehttp.RequestDataFromContext(ctx)
+
+		inFlightRequests.Inc()
+		inFlightRequestsHistogramReqLabels := addRequestLabels(req, inFlightRequestsHistogramLabels)
+		inFlightRequestsHistogram.Record(ctx, inFlightRequests.Load(), inFlightRequestsHistogramReqLabels...)
+		defer func() {
+			inFlightRequests.Dec()
+			inFlightRequestsHistogram.Record(ctx, inFlightRequests.Load(), inFlightRequestsHistogramReqLabels...)
+		}()
+
 		exstensions := event.Extensions()
 		if v, ok := exstensions[BenchmarkTimestampAttribute]; ok {
 			t, err := strconv.ParseInt(v.(string), 10, 64)
@@ -83,9 +99,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			if latency.Milliseconds() < 0 {
 				log.Printf("Negative latency %d\n", latency.Milliseconds())
 			} else {
-				req := cehttp.RequestDataFromContext(ctx)
-				labels := addRequestLabels(req, latencyHistogramLabels)
-				latencyHistogram.Record(ctx, latency.Milliseconds(), labels...)
+				latencyHistogram.Record(ctx, latency.Milliseconds(), addRequestLabels(req, latencyHistogramLabels)...)
 			}
 		}
 
@@ -132,7 +146,7 @@ func maybeSleep(config ReceiverConfig) {
 func exportMetrics(ctx context.Context) (wait func()) {
 	config := prometheus.Config{
 		DefaultHistogramBoundaries: []float64{
-			100, 500, 1000, // < 1s
+			10, 20, 50, 100, 500, 1000, // < 1s
 			5 * 1000, 10 * 1000, 30 * 1000, 60 * 1000, // < 60s
 			5 * 60 * 1000, 10 * 60 * 1000, 20 * 60 * 1000, // < 20m
 		},
@@ -160,6 +174,13 @@ func exportMetrics(ctx context.Context) (wait func()) {
 	latencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e_ms",
 		instrument.WithUnit(unit.Milliseconds),
 		instrument.WithDescription("Histogram for E2E latency since "+BenchmarkTimestampAttribute),
+	)
+	if err != nil {
+		panic(err)
+	}
+	inFlightRequestsHistogram, err = meter.SyncInt64().Histogram("in_flight_requests",
+		instrument.WithUnit(unit.Milliseconds),
+		instrument.WithDescription("Histogram for in-flight requests"),
 	)
 	if err != nil {
 		panic(err)
