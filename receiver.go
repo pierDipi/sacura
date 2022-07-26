@@ -31,8 +31,11 @@ import (
 )
 
 var (
-	latencyHistogram       syncint64.Histogram  = nil
-	latencyHistogramLabels []attribute.KeyValue = nil
+	e2eLatencyHistogram       syncint64.Histogram  = nil
+	e2eLatencyHistogramLabels []attribute.KeyValue = nil
+
+	processingLatencyHistogram       syncint64.Histogram  = nil
+	processingLatencyHistogramLabels []attribute.KeyValue = nil
 
 	inFlightRequestsHistogram       syncint64.Histogram  = nil
 	inFlightRequestsHistogramLabels []attribute.KeyValue = nil
@@ -63,9 +66,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 
 	inFlightRequests := atomic.NewInt64(0)
 
-	err := startReceiver(innerCtx, &config, func(ctx context.Context, event *ce.Event) {
-		req := cehttp.RequestDataFromContext(ctx)
-
+	err := startReceiver(innerCtx, &config, func(ctx context.Context, event *ce.Event, req *http.Request) error {
 		inFlightRequests.Inc()
 		inFlightRequestsHistogramReqLabels := addRequestLabels(req, inFlightRequestsHistogramLabels)
 		inFlightRequestsHistogram.Record(ctx, inFlightRequests.Load(), inFlightRequestsHistogramReqLabels...)
@@ -81,16 +82,18 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 				panic(err)
 			}
 			start := time.UnixMilli(t)
-			latency := time.Since(start)
-			if latency.Milliseconds() < 0 {
-				log.Printf("Negative latency %d\n", latency.Milliseconds())
+			e2eLatency := time.Since(start)
+			if e2eLatency.Milliseconds() < 0 {
+				log.Printf("Negative e2e latency %d\n", e2eLatency.Milliseconds())
 			} else {
-				latencyHistogram.Record(ctx, latency.Milliseconds(), addRequestLabels(req, latencyHistogramLabels)...)
+				e2eLatencyHistogram.Record(ctx, e2eLatency.Milliseconds(), addRequestLabels(req, e2eLatencyHistogramLabels)...)
 			}
 		}
 
 		maybeSleep(config)
 		received <- *event
+
+		return nil
 	})
 	if err != nil {
 		select {
@@ -106,7 +109,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	return nil
 }
 
-func addRequestLabels(req *cehttp.RequestData, latencyHistogramLabels []attribute.KeyValue) []attribute.KeyValue {
+func addRequestLabels(req *http.Request, latencyHistogramLabels []attribute.KeyValue) []attribute.KeyValue {
 	labels := make([]attribute.KeyValue, 0, len(latencyHistogramLabels)+2)
 	copy(labels, latencyHistogramLabels)
 	path := "/"
@@ -157,9 +160,16 @@ func exportMetrics(ctx context.Context) (wait func()) {
 
 	meter := global.Meter("sacura")
 
-	latencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e_ms",
+	e2eLatencyHistogram, err = meter.SyncInt64().Histogram("latency_e2e_ms",
 		instrument.WithUnit(unit.Milliseconds),
 		instrument.WithDescription("Histogram for E2E latency since "+BenchmarkTimestampAttribute),
+	)
+	if err != nil {
+		panic(err)
+	}
+	processingLatencyHistogram, err = meter.SyncInt64().Histogram("processing_latency_ms",
+		instrument.WithUnit(unit.Milliseconds),
+		instrument.WithDescription("Histogram for processing latency"),
 	)
 	if err != nil {
 		panic(err)
@@ -213,18 +223,26 @@ func scrapeMetrics() {
 	log.Println("Metrics\n", string(body))
 }
 
-func startReceiver(ctx context.Context, config *ReceiverConfig, h func(context.Context, *event.Event)) error {
+func startReceiver(ctx context.Context, config *ReceiverConfig, h func(context.Context, *event.Event, *http.Request) error) error {
 	s := http.Server{
 		Addr: fmt.Sprintf(":%d", config.Port),
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			defer func() {
+				processingLatencyHistogram.Record(ctx, time.Since(start).Milliseconds(), addRequestLabels(r, processingLatencyHistogramLabels)...)
+			}()
+
 			msg := cehttp.NewMessageFromHttpRequest(r)
 			e, err := binding.ToEvent(ctx, msg)
 			if err != nil {
 				http.Error(writer, err.Error(), http.StatusBadRequest)
 				return
 			}
-			ctx := cehttp.WithRequestDataAtContext(ctx, r)
-			h(ctx, e)
+			if err := h(ctx, e, r); err != nil {
+				http.Error(writer, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writer.WriteHeader(http.StatusOK)
 		}),
 	}
 
