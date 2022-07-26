@@ -18,11 +18,9 @@ type Config struct {
 	Receiver ReceiverConfig `json:"receiver" yaml:"receiver"`
 
 	Duration string         `json:"duration" yaml:"duration"`
-	Timeout  string         `json:"timeout" yaml:"timeout"`
 	Ordered  *OrderedConfig `json:"ordered" yaml:"ordered"`
 
 	ParsedDuration time.Duration
-	ParsedTimeout  time.Duration
 }
 
 type OrderedConfig struct {
@@ -77,11 +75,6 @@ func (c *Config) validate() error {
 	c.ParsedDuration, err = time.ParseDuration(c.Duration)
 	if err != nil {
 		return invalidErr("duration", err)
-	}
-
-	c.ParsedTimeout, err = time.ParseDuration(c.Timeout)
-	if err != nil {
-		return invalidErr("timeout", err)
 	}
 
 	if !c.Sender.Disabled && c.Sender.FrequencyPerSecond <= 0 {

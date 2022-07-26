@@ -45,8 +45,6 @@ timeout: 1m
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
-				Timeout:        "1m",
-				ParsedTimeout:  time.Minute,
 			},
 			wantErr: false,
 		},
@@ -78,8 +76,6 @@ timeout: 1m
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
-				Timeout:        "1m",
-				ParsedTimeout:  time.Minute,
 			},
 			wantErr: true,
 		},
@@ -111,8 +107,6 @@ timeout: 1m
 				},
 				Duration:       "1m",
 				ParsedDuration: time.Minute,
-				Timeout:        "1m",
-				ParsedTimeout:  time.Minute,
 			},
 			wantErr: true,
 		},
@@ -144,8 +138,6 @@ timeout: 1m
 				},
 				Duration:       "1H",
 				ParsedDuration: 0,
-				Timeout:        "1m",
-				ParsedTimeout:  0, // it isn't set since we check the invalid field before checking timeout
 			},
 			wantErr: true,
 		},
@@ -159,9 +151,8 @@ sender:
   keepAlive: true
 receiver:
   port: 8080
-  timeout: 1m
+  timeout: abc
 duration: 1h
-timeout: 1H
 `),
 			want: Config{
 				Sender: SenderConfig{
@@ -172,13 +163,11 @@ timeout: 1H
 				},
 				Receiver: ReceiverConfig{
 					Port:          8080,
-					Timeout:       "1m",
+					Timeout:       "abc",
 					ParsedTimeout: 0, // it isn't set since we check the invalid field before checking timeout
 				},
 				Duration:       "1h",
 				ParsedDuration: time.Hour,
-				Timeout:        "1H",
-				ParsedTimeout:  0,
 			},
 			wantErr: true,
 		},
