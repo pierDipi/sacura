@@ -253,7 +253,7 @@ func startReceiver(ctx context.Context, config *ReceiverConfig, h func(context.C
 
 	select {
 	case <-ctx.Done():
-		return nil
+		return s.Close()
 	case err := <-errChan:
 		return err
 	}
