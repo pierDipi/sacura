@@ -13,7 +13,8 @@ import (
 	"time"
 
 	ce "github.com/cloudevents/sdk-go/v2"
-	ceclient "github.com/cloudevents/sdk-go/v2/client"
+	"github.com/cloudevents/sdk-go/v2/binding"
+	"github.com/cloudevents/sdk-go/v2/event"
 	cehttp "github.com/cloudevents/sdk-go/v2/protocol/http"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -44,21 +45,6 @@ const (
 func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- ce.Event) error {
 	defer close(received)
 
-	protocol, err := cehttp.New(
-		cehttp.WithPort(config.Port),
-		cehttp.WithRequestDataAtContextMiddleware(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create protocol: %w", err)
-	}
-
-	client, err := ceclient.New(protocol,
-		ceclient.WithPollGoroutines(100),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
 	innerCtx, cancel := context.WithCancel(context.Background())
 	wait := exportMetrics(innerCtx)
 	defer wait()
@@ -77,7 +63,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 
 	inFlightRequests := atomic.NewInt64(0)
 
-	err = client.StartReceiver(innerCtx, func(ctx context.Context, event ce.Event) {
+	err := startReceiver(innerCtx, &config, func(ctx context.Context, event *ce.Event) {
 		req := cehttp.RequestDataFromContext(ctx)
 
 		inFlightRequests.Inc()
@@ -104,7 +90,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 		}
 
 		maybeSleep(config)
-		received <- event
+		received <- *event
 	})
 	if err != nil {
 		select {
@@ -225,4 +211,32 @@ func scrapeMetrics() {
 		panic(err)
 	}
 	log.Println("Metrics\n", string(body))
+}
+
+func startReceiver(ctx context.Context, config *ReceiverConfig, h func(context.Context, *event.Event)) error {
+	s := http.Server{
+		Addr: fmt.Sprintf(":%d", config.Port),
+		Handler: http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
+			msg := cehttp.NewMessageFromHttpRequest(r)
+			e, err := binding.ToEvent(ctx, msg)
+			if err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			ctx := cehttp.WithRequestDataAtContext(ctx, r)
+			h(ctx, e)
+		}),
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- s.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-errChan:
+		return err
+	}
 }
