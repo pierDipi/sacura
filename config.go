@@ -36,9 +36,10 @@ type SenderConfig struct {
 }
 
 type ReceiverConfig struct {
-	Port                    int    `json:"port" yaml:"port"`
-	Timeout                 string `json:"timeout" yaml:"timeout"`
-	MaxDuplicatesPercentage *int   `json:"maxDuplicatesPercentage" yaml:"maxDuplicatesPercentage"`
+	Port                      int    `json:"port" yaml:"port"`
+	Timeout                   string `json:"timeout" yaml:"timeout"`
+	MaxDuplicatesPercentage   *int   `json:"maxDuplicatesPercentage" yaml:"maxDuplicatesPercentage"`
+	IncludeRemoteAddressLabel *bool  `json:"includeRemoteAddressLabel" yaml:"includeRemoteAddressLabel"`
 
 	ReceiverFaultConfig *ReceiverFaultConfig `json:"fault" yaml:"fault"`
 
