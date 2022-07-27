@@ -68,7 +68,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 
 	err := startReceiver(innerCtx, &config, func(ctx context.Context, event *ce.Event, req *http.Request) error {
 		inFlightRequests.Inc()
-		inFlightRequestsHistogramReqLabels := addRequestLabels(req, inFlightRequestsHistogramLabels)
+		inFlightRequestsHistogramReqLabels := addRequestLabels(req, &config, inFlightRequestsHistogramLabels)
 		inFlightRequestsHistogram.Record(ctx, inFlightRequests.Load(), inFlightRequestsHistogramReqLabels...)
 		defer func() {
 			inFlightRequests.Dec()
@@ -86,7 +86,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 			if e2eLatency.Milliseconds() < 0 {
 				log.Printf("Negative e2e latency %d\n", e2eLatency.Milliseconds())
 			} else {
-				e2eLatencyHistogram.Record(ctx, e2eLatency.Milliseconds(), addRequestLabels(req, e2eLatencyHistogramLabels)...)
+				e2eLatencyHistogram.Record(ctx, e2eLatency.Milliseconds(), addRequestLabels(req, &config, e2eLatencyHistogramLabels)...)
 			}
 		}
 
@@ -109,7 +109,7 @@ func StartReceiver(ctx context.Context, config ReceiverConfig, received chan<- c
 	return nil
 }
 
-func addRequestLabels(req *http.Request, latencyHistogramLabels []attribute.KeyValue) []attribute.KeyValue {
+func addRequestLabels(req *http.Request, config *ReceiverConfig, latencyHistogramLabels []attribute.KeyValue) []attribute.KeyValue {
 	labels := make([]attribute.KeyValue, 0, len(latencyHistogramLabels)+2)
 	copy(labels, latencyHistogramLabels)
 	path := "/"
@@ -117,7 +117,9 @@ func addRequestLabels(req *http.Request, latencyHistogramLabels []attribute.KeyV
 		path = req.URL.Path
 	}
 	labels = append(labels, attribute.String("request_path", path))
-	labels = append(labels, attribute.String("remote_addr", req.RemoteAddr))
+	if config.IncludeRemoteAddressLabel != nil && *config.IncludeRemoteAddressLabel {
+		labels = append(labels, attribute.String("remote_addr", req.RemoteAddr))
+	}
 	return labels
 }
 
@@ -229,7 +231,7 @@ func startReceiver(ctx context.Context, config *ReceiverConfig, h func(context.C
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			defer func() {
-				processingLatencyHistogram.Record(ctx, time.Since(start).Milliseconds(), addRequestLabels(r, processingLatencyHistogramLabels)...)
+				processingLatencyHistogram.Record(ctx, time.Since(start).Milliseconds(), addRequestLabels(r, config, processingLatencyHistogramLabels)...)
 			}()
 
 			msg := cehttp.NewMessageFromHttpRequest(r)
