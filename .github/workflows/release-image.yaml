@@ -8,6 +8,9 @@ name: Nightly release
 on:
   push:
     branches: [ 'main' ]
+  schedule:
+    - cron: "0 6 * * *" # Daily at 06:00.
+  workflow_dispatch: # Manual workflow trigger
 
 env:
   REGISTRY: ghcr.io
